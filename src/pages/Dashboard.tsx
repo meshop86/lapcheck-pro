@@ -14,6 +14,7 @@ import { useAppStore } from "@/store/useAppStore";
 import {
   bytes,
   hours,
+  joinParts,
   num,
   percent,
   text,
@@ -249,19 +250,29 @@ export default function Dashboard({
                   : "—",
               ],
               [
-                "BIOS",
-                `${text(profile.machine.biosVendor)} ${text(profile.machine.biosVersion)} (${text(profile.machine.biosReleaseDate)})`,
+                "BIOS / Firmware",
+                joinParts([
+                  profile.machine.biosVendor,
+                  profile.machine.biosVersion,
+                  profile.machine.biosReleaseDate,
+                ]),
               ],
-              [
-                "Bản quyền Windows",
-                profile.machine.licenseActivated === null
-                  ? "—"
-                  : `${profile.machine.licenseActivated ? "Đã kích hoạt" : "Chưa kích hoạt"}${
-                      profile.machine.licenseChannel
-                        ? ` · ${profile.machine.licenseChannel}`
-                        : ""
-                    }`,
-              ],
+              // Chi Windows moi co khai niem ban quyen kich hoat
+              ...(profile.platform === "win32"
+                ? ([
+                    [
+                      "Bản quyền Windows",
+                      profile.machine.licenseActivated === null
+                        ? "—"
+                        : joinParts([
+                            profile.machine.licenseActivated
+                              ? "Đã kích hoạt"
+                              : "Chưa kích hoạt",
+                            profile.machine.licenseChannel,
+                          ]),
+                    ],
+                  ] as [string, string][])
+                : []),
             ]}
           />
         </Card>

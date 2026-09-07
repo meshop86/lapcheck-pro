@@ -1,0 +1,54 @@
+appId: com.lapcheck.pro
+productName: LapCheck Pro
+copyright: Copyright (c) 2026 Luong Xuan Hoa
+
+directories:
+  output: release/${version}
+  buildResources: resources
+
+# Chi dong goi ket qua build cua electron-vite, khong keo theo ma nguon
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+
+asar: true
+npmRebuild: false
+
+mac:
+  category: public.app-category.utilities
+  # Cong cu ngoai (smartctl...) di kem, app doc o Resources/bin/mac
+  extraResources:
+    - from: resources/bin/mac
+      to: bin/mac
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+  # App can doc SMART va powermetrics nen khong chay trong sandbox
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  extendInfo:
+    NSCameraUsageDescription: Dùng webcam để kiểm tra camera của máy.
+    NSMicrophoneUsageDescription: Dùng micro để kiểm tra micro của máy.
+
+dmg:
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+win:
+  extraResources:
+    - from: resources/bin/win
+      to: bin/win
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # Doc SMART, WMI va cam bien nhiet do doi hoi quyen quan tri
+  requestedExecutionLevel: requireAdministrator
+
+nsis:
+  oneClick: false
+  perMachine: true
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-Setup-${version}.${ext}

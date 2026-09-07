@@ -1,4 +1,4 @@
-import type { SystemProfile, TestCategory } from '@shared/types'
+import type { SystemProfile, TestCategory, TestResult } from '@shared/types'
 
 export type TestKind = 'interactive' | 'automated' | 'manual'
 
@@ -133,6 +133,22 @@ export const TEST_CATALOG: TestDefinition[] = [
 export function availableTests(profile: SystemProfile | null): TestDefinition[] {
   if (!profile) return TEST_CATALOG
   return TEST_CATALOG.filter((t) => !t.isAvailable || t.isAvailable(profile))
+}
+
+/**
+ * Tien do kiem tra: chi dem cac hang muc ap dung cho may nay.
+ * Bai dang chay chua tinh la xong, bai bo qua thi coi nhu da co ket luan.
+ */
+export function testProgress(
+  profile: SystemProfile | null,
+  results: Record<string, TestResult>
+): { done: number; total: number } {
+  const tests = availableTests(profile)
+  const done = tests.filter((t) => {
+    const status = results[t.id]?.status
+    return status && status !== 'pending' && status !== 'running'
+  }).length
+  return { done, total: tests.length }
 }
 
 export const CATEGORY_LABEL: Record<TestCategory, string> = {

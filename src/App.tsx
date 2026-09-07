@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   ShieldAlert
 } from 'lucide-react'
+import { testProgress } from '@/lib/testCatalog'
 import { useAppStore } from '@/store/useAppStore'
 import Dashboard from '@/pages/Dashboard'
 import SystemInfo from '@/pages/SystemInfo'
@@ -36,10 +37,7 @@ export default function App() {
     void init()
   }, [init])
 
-  const done = Object.values(results).filter(
-    (r) => r.status !== 'pending' && r.status !== 'skipped'
-  ).length
-  const total = Object.values(results).length
+  const { done, total } = testProgress(profile, results)
 
   return (
     <div className="flex h-full bg-ink-950">

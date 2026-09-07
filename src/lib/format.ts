@@ -25,6 +25,17 @@ export function text(value: string | null | undefined): string {
   return s === "" ? "—" : s;
 }
 
+/** Ghep cac manh thong tin, bo qua manh rong de khong con dau gach hay ngoac thua. */
+export function joinParts(
+  pieces: (string | number | null | undefined)[],
+  sep = " · "
+): string {
+  const kept = pieces
+    .map((p) => String(p ?? "").trim())
+    .filter((p) => p !== "" && p !== "—");
+  return kept.length ? kept.join(sep) : "—";
+}
+
 export function percent(value: number | null | undefined, digits = 0): string {
   if (value === null || value === undefined || !Number.isFinite(value))
     return "—";

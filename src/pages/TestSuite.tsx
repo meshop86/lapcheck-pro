@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Play, RotateCcw, SkipForward } from 'lucide-react'
 import type { TestCategory, TestStatus } from '@shared/types'
 import { Button, Card, Modal, ProgressBar, StatusBadge, inputClass } from '@/components/ui'
-import { CATEGORY_LABEL, availableTests, type TestDefinition } from '@/lib/testCatalog'
+import { CATEGORY_LABEL, availableTests, testProgress, type TestDefinition } from '@/lib/testCatalog'
 import { TEST_PANELS } from '@/tests'
 import { useAppStore } from '@/store/useAppStore'
 import { duration } from '@/lib/format'
@@ -28,10 +28,7 @@ export default function TestSuite() {
     return [...map.entries()]
   }, [tests])
 
-  const done = tests.filter((t) => {
-    const status = results[t.id]?.status
-    return status && status !== 'pending' && status !== 'running'
-  }).length
+  const { done } = testProgress(profile, results)
 
   const active = openId ? tests.find((t) => t.id === openId) : null
   const Panel = active ? TEST_PANELS[active.id] : null
