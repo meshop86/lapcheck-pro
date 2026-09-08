@@ -8,6 +8,8 @@ import SpeakerTest from './SpeakerTest'
 import MicrophoneTest from './MicrophoneTest'
 import WebcamTest from './WebcamTest'
 import DiskBenchTest from './DiskBenchTest'
+import DiskHealthTest from './DiskHealthTest'
+import OwnershipTest from './OwnershipTest'
 import MemoryTestPanel from './MemoryTestPanel'
 import CpuStressTest from './CpuStressTest'
 import BatteryDrainTest from './BatteryDrainTest'
@@ -24,12 +26,14 @@ export const TEST_PANELS: Record<string, ComponentType<TestPanelProps>> = {
   speaker: SpeakerTest,
   microphone: MicrophoneTest,
   webcam: WebcamTest,
+  'disk-health': DiskHealthTest,
   'disk-benchmark': DiskBenchTest,
   'memory-test': MemoryTestPanel,
   'cpu-stress': CpuStressTest,
   'battery-drain': BatteryDrainTest,
   ports: PortsTest,
-  physical: PhysicalTest
+  physical: PhysicalTest,
+  'mac-ownership': OwnershipTest
 }
 
 export type { TestPanelProps }

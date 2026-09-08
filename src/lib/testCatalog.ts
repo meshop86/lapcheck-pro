@@ -80,6 +80,15 @@ export const TEST_CATALOG: TestDefinition[] = [
     durationHint: '1 phút'
   },
   {
+    id: 'disk-health',
+    name: 'Sức khỏe ổ cứng (SMART)',
+    category: 'storage',
+    kind: 'automated',
+    purpose:
+      'Đọc chỉ số SMART do chính ổ ghi lại: giờ chạy, tuổi thọ ghi, sector hỏng — không thể làm giả bằng cách cài lại máy.',
+    durationHint: '30 giây'
+  },
+  {
     id: 'disk-benchmark',
     name: 'Tốc độ ổ cứng',
     category: 'storage',
@@ -127,6 +136,16 @@ export const TEST_CATALOG: TestDefinition[] = [
     kind: 'manual',
     purpose: 'Ghi nhận móp méo, bản lề lỏng, ron cao su, ốc bị toét — dấu hiệu máy đã bung.',
     durationHint: '3 phút'
+  },
+  {
+    id: 'mac-ownership',
+    name: 'Khoá máy: MDM, DEP & iCloud',
+    category: 'ownership',
+    kind: 'automated',
+    purpose:
+      'Máy dính MDM/DEP hoặc Activation Lock thì cài lại macOS vẫn không dùng được — rủi ro lớn nhất khi mua MacBook cũ.',
+    durationHint: '30 giây',
+    isAvailable: (p) => p.platform === 'darwin'
   }
 ]
 
@@ -160,5 +179,6 @@ export const CATEGORY_LABEL: Record<TestCategory, string> = {
   thermal: 'Nhiệt & hiệu năng',
   battery: 'Pin',
   connectivity: 'Kết nối',
-  physical: 'Ngoại hình'
+  physical: 'Ngoại hình',
+  ownership: 'Khoá & quyền sở hữu'
 }

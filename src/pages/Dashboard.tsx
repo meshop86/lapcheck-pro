@@ -1,4 +1,10 @@
 import { AlertTriangle, ArrowRight, Gauge, Thermometer } from "lucide-react";
+import {
+  assessDisks,
+  VERDICT_LABEL,
+  type DiskHealth,
+  type DiskVerdict,
+} from "@shared/diskHealth";
 import type { PageId } from "@/App";
 import {
   Button,
@@ -21,6 +27,23 @@ import {
   thermalPressureTone,
 } from "@/lib/format";
 
+/** Mau StatTile theo ket luan suc khoe o. */
+const VERDICT_TONE: Record<DiskVerdict, "good" | "warn" | "bad" | "neutral"> = {
+  good: "good",
+  fair: "warn",
+  poor: "bad",
+  failing: "bad",
+  unknown: "neutral",
+};
+
+/** Chon o co diem thap nhat; o chua doc duoc SMART bi coi la te nhat. */
+function worstDisk(list: DiskHealth[]): DiskHealth | null {
+  if (!list.length) return null;
+  return list.reduce((worst, d) =>
+    (d.score ?? -1) < (worst.score ?? -1) ? d : worst,
+  );
+}
+
 export default function Dashboard({
   onNavigate,
 }: {
@@ -34,6 +57,8 @@ export default function Dashboard({
   const battery = profile.battery;
   const mainDrive = profile.storage[0];
   const smart = mainDrive?.smart;
+  // O te nhat quyet dinh mau tile, vi mot o hong la ca may co van de
+  const diskHealth = worstDisk(assessDisks(profile.storage));
   const display = profile.displays[0];
   const criticalFindings = findings.filter(
     (f) => f.severity === "critical" || f.severity === "major",
@@ -125,28 +150,18 @@ export default function Dashboard({
           }
         />
         <StatTile
-          label="Tuổi thọ SSD đã dùng"
+          label="Sức khoẻ ổ cứng"
           value={
-            smart?.percentageUsed !== null &&
-            smart?.percentageUsed !== undefined
-              ? percent(smart.percentageUsed)
-              : "—"
+            diskHealth && diskHealth.score !== null
+              ? `${diskHealth.score}/100`
+              : VERDICT_LABEL[diskHealth?.verdict ?? "unknown"]
           }
           hint={
-            mainDrive
-              ? `${mainDrive.model || mainDrive.name} · ${bytes(mainDrive.sizeBytes)}`
-              : ""
+            diskHealth
+              ? `${VERDICT_LABEL[diskHealth.verdict]} · ${diskHealth.summary}`
+              : "Chưa đọc được ổ cứng"
           }
-          tone={
-            smart?.percentageUsed === null ||
-            smart?.percentageUsed === undefined
-              ? "neutral"
-              : smart.percentageUsed >= 80
-                ? "bad"
-                : smart.percentageUsed >= 50
-                  ? "warn"
-                  : "good"
-          }
+          tone={VERDICT_TONE[diskHealth?.verdict ?? "unknown"]}
         />
         <StatTile
           label={cpuTemp !== null ? "Nhiệt độ CPU" : "Áp lực nhiệt"}

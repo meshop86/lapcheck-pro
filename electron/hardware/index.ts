@@ -10,12 +10,14 @@ import type {
   MachineInfo,
   MemoryInfo,
   NetworkAdapter,
+  OwnershipInfo,
   Platform,
   StorageDevice,
   StoragePartition,
   SystemProfile
 } from '@shared/types'
-import { emptySmart, fromMacSmartStatus, readSmartctl } from './smart'
+import { isInternalDisk } from '@shared/diskHealth'
+import { emptySmart, fromMacSmartStatus, mergeSmart, readSmartctl } from './smart'
 import { round, run, toNum, toStr } from './util'
 import * as mac from './platform/darwin'
 import * as win from './platform/windows'
@@ -268,6 +270,7 @@ async function collectStorage(
     if (b.type === 'disk' && b.device) removableByDevice.set(toStr(b.device), Boolean(b.removable))
   }
   const winCounters = isWin ? await win.readReliabilityCounters() : {}
+  const winBlobs = isWin ? await win.readSmartBlobs() : {}
   const macStatus = isMac ? await mac.readNvmeSmartStatus() : {}
 
   const devices: StorageDevice[] = []
@@ -282,7 +285,9 @@ async function collectStorage(
       smartctlMissing = true
       if (isWin) {
         const serial = toStr(d.serialNum).toLowerCase()
-        smart = winCounters[serial] ?? Object.values(winCounters)[i] ?? null
+        const counters = winCounters[serial] ?? Object.values(winCounters)[i] ?? null
+        // Blob WMI cho bang thuoc tinh ATA day du, Storage API bu do mon cho o NVMe
+        smart = mergeSmart(winBlobs[i] ?? null, counters)
       } else if (isMac) {
         const bsd = Object.keys(macStatus)[i]
         smart = bsd ? fromMacSmartStatus(macStatus[bsd]) : null
@@ -309,9 +314,15 @@ async function collectStorage(
     })
   }
 
-  if (smartctlMissing) {
+  // Chi canh bao khi thieu smartctl ma nguon du phong cung khong bu duoc chi so quan trong
+  const thinSmart = devices.some(
+    (d) => isInternalDisk(d) && d.smart.powerOnHours === null && d.smart.percentageUsed === null
+  )
+  if (smartctlMissing && thinSmart) {
     warnings.push(
-      'Không tìm thấy smartctl nên số liệu SMART bị rút gọn. Cài smartmontools để đọc đầy đủ giờ chạy, TBW, số lần bật máy.'
+      isMac
+        ? 'Thiếu smartctl nên không đọc được giờ chạy và độ hao mòn của ổ. Cài bằng lệnh: brew install smartmontools'
+        : 'Không đọc được số liệu SMART đầy đủ. Chạy app bằng quyền Administrator, hoặc cài smartmontools.'
     )
   }
   return devices
@@ -586,11 +597,29 @@ export interface CollectOptions {
   force?: boolean
 }
 
+/* ------------------------------------------------------------------ */
+/* Khoa may & quyen so huu                                             */
+/* ------------------------------------------------------------------ */
+
+async function collectOwnership(warnings: string[]): Promise<OwnershipInfo | null> {
+  if (!isMac) return null
+  try {
+    const ownership = await mac.readOwnership()
+    if (ownership.depEnrolled === null && ownership.mdmEnrolled === null) {
+      warnings.push('Không đọc được trạng thái MDM/DEP của máy.')
+    }
+    return ownership
+  } catch (err) {
+    warnings.push(`Đọc tình trạng khoá máy thất bại: ${(err as Error).message}`)
+    return null
+  }
+}
+
 export async function collectSystemProfile(opts: CollectOptions): Promise<SystemProfile> {
   if (!opts.force && cache && Date.now() - cache.at < CACHE_TTL_MS) return cache.profile
 
   const warnings: string[] = []
-  const [privileged, machine, cpu, memory, storage, battery, dg, network, audio] =
+  const [privileged, machine, cpu, memory, storage, battery, dg, network, audio, ownership] =
     await Promise.all([
       isPrivileged(),
       collectMachine(warnings),
@@ -600,7 +629,8 @@ export async function collectSystemProfile(opts: CollectOptions): Promise<System
       collectBattery(warnings),
       collectDisplaysAndGraphics(),
       collectNetwork(),
-      collectAudio()
+      collectAudio(),
+      collectOwnership(warnings)
     ])
 
   const finalBattery = finalizeBattery(battery, machine, warnings)
@@ -625,6 +655,7 @@ export async function collectSystemProfile(opts: CollectOptions): Promise<System
     graphics: dg.graphics,
     network,
     audio,
+    ownership,
     warnings
   }
 

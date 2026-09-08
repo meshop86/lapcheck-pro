@@ -1,4 +1,5 @@
 import type { Finding, Inspection, TestResult } from "@shared/types";
+import { assessDisk, isInternalDisk, VERDICT_LABEL } from "@shared/diskHealth";
 
 const esc = (value: unknown): string =>
   String(value ?? "")
@@ -65,6 +66,15 @@ const STATUS: Record<TestResult["status"], { label: string; color: string }> = {
   running: { label: "Đang chạy", color: "#0284c7" },
 };
 
+/** Mau chu cho ket luan suc khoe o cung trong ban in. */
+const DISK_VERDICT_COLOR: Record<string, string> = {
+  good: "#059669",
+  fair: "#d97706",
+  poor: "#ea580c",
+  failing: "#dc2626",
+  unknown: "#64748b",
+};
+
 function rows(pairs: [string, string][]): string {
   return pairs
     .map(([k, v]) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`)
@@ -76,7 +86,7 @@ export function renderReportHtml(inspection: Inspection): string {
   const m = p.machine;
   const grade = inspection.grade;
   const gradeColor = GRADE_COLOR[grade.letter] ?? "#334155";
-  const mainDisk = p.storage.find((d) => !d.removable) ?? p.storage[0];
+  const mainDisk = p.storage.find(isInternalDisk) ?? p.storage[0];
   const internalDisplay = p.displays.find((d) => d.builtin) ?? p.displays[0];
 
   const conditionLabel = {
@@ -160,6 +170,7 @@ export function renderReportHtml(inspection: Inspection): string {
     ],
   ]);
 
+  const diskHealth = mainDisk ? assessDisk(mainDisk) : null;
   const diskRows = mainDisk
     ? rows([
         ["Model ổ cứng", dash(mainDisk.model)],
@@ -201,8 +212,39 @@ export function renderReportHtml(inspection: Inspection): string {
             ? `${mainDisk.smart.percentageUsed}%`
             : "—",
         ],
+        [
+          "Đánh giá tổng thể",
+          diskHealth
+            ? `<strong style="color:${DISK_VERDICT_COLOR[diskHealth.verdict]}">${VERDICT_LABEL[diskHealth.verdict]}${diskHealth.score !== null ? ` — ${diskHealth.score}/100` : ""}</strong>`
+            : "—",
+        ],
       ])
     : '<tr><td colspan="2">Không phát hiện ổ cứng</td></tr>';
+
+  const yn = (v: boolean | null, badWhenTrue = true): string => {
+    if (v === null) return "—";
+    const bad = badWhenTrue ? v : !v;
+    return bad
+      ? `<strong style="color:#dc2626">${v ? "Có" : "Không"}</strong>`
+      : v
+        ? "Có"
+        : "Không";
+  };
+
+  const own = p.ownership;
+  const ownershipRows = own
+    ? rows([
+        ["Ghi danh DEP", yn(own.depEnrolled)],
+        ["Bị MDM quản lý", yn(own.mdmEnrolled)],
+        ["Tổ chức quản lý", dash(own.mdmOrganization)],
+        ["Activation Lock", yn(own.activationLocked)],
+        ["Apple ID đang đăng nhập", dash(own.icloudAccount)],
+        ["Find My", yn(own.findMyEnabled)],
+        ["Managed Apple ID", yn(own.managedAppleId)],
+        ["Mật khẩu firmware", yn(own.firmwarePassword)],
+        ["Số configuration profile", own.configProfiles?.toString() ?? "—"],
+      ])
+    : "";
 
   const batteryRows = p.battery.hasBattery
     ? rows([
@@ -398,6 +440,7 @@ export function renderReportHtml(inspection: Inspection): string {
   <div><h3>Ổ cứng chính</h3><table class="kv">${diskRows}</table></div>
   <div><h3>Pin</h3><table class="kv">${batteryRows}</table></div>
   <div><h3>Màn hình</h3><table class="kv">${displayRows}</table></div>
+  ${ownershipRows ? `<div><h3>Khoá máy &amp; quyền sở hữu</h3><table class="kv">${ownershipRows}</table></div>` : ""}
 </div>
 
 <h2>Kết quả kiểm tra chức năng</h2>

@@ -1,5 +1,5 @@
 import type { BatteryInfo, DisplayInfo, SmartData } from '@shared/types'
-import { fromWindowsReliability } from '../smart'
+import { fromWindowsReliability, fromWindowsSmartBlob } from '../smart'
 import { powershellJson, round, run, toNum, toSerial, toStr } from '../util'
 
 function asArray<T>(value: T | T[] | null | undefined): T[] {
@@ -297,6 +297,49 @@ export async function readReliabilityCounters(): Promise<Record<string, SmartDat
     const key = serial || `deviceid:${toStr(row.DeviceId)}`
     map[key] = fromWindowsReliability(row)
   }
+  return map
+}
+
+const SMART_BLOB_SCRIPT = `
+$status = @{}
+try {
+  Get-CimInstance -Namespace root\\wmi -ClassName MSStorageDriver_FailurePredictStatus -ErrorAction Stop |
+    ForEach-Object { $status[$_.InstanceName] = [bool]$_.PredictFailure }
+} catch {}
+$list = @()
+try {
+  Get-CimInstance -Namespace root\\wmi -ClassName MSStorageDriver_FailurePredictData -ErrorAction Stop |
+    ForEach-Object {
+      $list += [ordered]@{
+        InstanceName = $_.InstanceName
+        PredictFailure = $status[$_.InstanceName]
+        VendorSpecific = $_.VendorSpecific
+      }
+    }
+} catch {}
+@($list) | ConvertTo-Json -Depth 3 -Compress
+`
+
+interface SmartBlobRow {
+  InstanceName?: string
+  PredictFailure?: boolean | null
+  VendorSpecific?: number[]
+}
+
+/**
+ * Doc bang thuoc tinh SMART day du qua WMI, khong can cai smartmontools.
+ * Chi o ATA/SATA moi co; o NVMe thi Windows khong cong bo bang nay.
+ * Key tra ve la so thu tu o dia lay tu duoi InstanceName (vi du "...\\5&1a2b&0&000000_0" -> 0).
+ */
+export async function readSmartBlobs(): Promise<Record<number, SmartData>> {
+  const rows = asArray(await powershellJson<SmartBlobRow | SmartBlobRow[]>(SMART_BLOB_SCRIPT, 30_000))
+  const map: Record<number, SmartData> = {}
+  rows.forEach((row, fallbackIndex) => {
+    const m = /_(\d+)\s*$/.exec(toStr(row.InstanceName))
+    const index = m ? Number(m[1]) : fallbackIndex
+    const data = fromWindowsSmartBlob(row.VendorSpecific, row.PredictFailure ?? null)
+    if (data) map[index] = data
+  })
   return map
 }
 

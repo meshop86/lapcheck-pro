@@ -1,4 +1,5 @@
-import type { StorageDevice } from '@shared/types'
+import type { OwnershipInfo, StorageDevice } from '@shared/types'
+import { assessDisk, VERDICT_LABEL, type DiskVerdict } from '@shared/diskHealth'
 import { Card, InfoTable } from '@/components/ui'
 import { useAppStore } from '@/store/useAppStore'
 import { bytes, dateTime, hours, num, percent, tb, text, wh } from '@/lib/format'
@@ -8,13 +9,41 @@ function yesNo(value: boolean | null | undefined): string {
   return value ? 'Có' : 'Không'
 }
 
+/** Mau nen cho ket luan suc khoe o cung. */
+const VERDICT_TONE: Record<DiskVerdict, string> = {
+  good: 'bg-emerald-500/15 text-emerald-300',
+  fair: 'bg-amber-500/15 text-amber-300',
+  poor: 'bg-orange-500/15 text-orange-300',
+  failing: 'bg-red-500/15 text-red-300',
+  unknown: 'bg-mist-500/15 text-mist-300'
+}
+
 function SmartCard({ drive }: { drive: StorageDevice }) {
   const s = drive.smart
+  const health = assessDisk(drive)
   return (
     <Card
       title={`${drive.model || drive.name} — ${bytes(drive.sizeBytes)}`}
       subtitle={`${drive.type} · ${text(drive.interfaceType)} · firmware ${text(drive.firmware)} · serial ${text(drive.serial)}`}
     >
+      <div className="mb-3 flex items-center gap-2">
+        <span className={`rounded px-2 py-0.5 text-xs font-medium ${VERDICT_TONE[health.verdict]}`}>
+          {VERDICT_LABEL[health.verdict]}
+          {health.score !== null ? ` · ${health.score}/100` : ''}
+        </span>
+        <span className="text-xs text-mist-400">{health.summary}</span>
+      </div>
+
+      {health.issues.length > 0 && (
+        <ul className="mb-3 space-y-1 text-xs">
+          {health.issues.map((issue, i) => (
+            <li key={i} className={issue.level === 'bad' ? 'text-red-300' : issue.level === 'warn' ? 'text-amber-300' : 'text-mist-400'}>
+              · {issue.text}
+            </li>
+          ))}
+        </ul>
+      )}
+
       {!s.available ? (
         <p className="text-sm text-mist-400">
           Chưa đọc được SMART{s.error ? `: ${s.error}` : ''}. Chạy app với quyền quản trị hoặc cài
@@ -95,6 +124,36 @@ function SmartCard({ drive }: { drive: StorageDevice }) {
             </div>
           ))}
         </div>
+      )}
+    </Card>
+  )
+}
+
+function OwnershipCard({ o }: { o: OwnershipInfo }) {
+  return (
+    <Card
+      title="Khoá máy & quyền sở hữu"
+      subtitle="Máy dính MDM/DEP hoặc Activation Lock thì cài lại hệ điều hành vẫn không dùng được"
+    >
+      <InfoTable
+        rows={[
+          ['Ghi danh DEP (Apple Business Manager)', yesNo(o.depEnrolled)],
+          ['Đang bị MDM quản lý', yesNo(o.mdmEnrolled)],
+          ['Tổ chức quản lý', text(o.mdmOrganization)],
+          ['Số configuration profile', num(o.configProfiles)],
+          ['Activation Lock', yesNo(o.activationLocked)],
+          ['Apple ID đang đăng nhập', text(o.icloudAccount)],
+          ['Managed Apple ID', yesNo(o.managedAppleId)],
+          ['Find My đang bật', yesNo(o.findMyEnabled)],
+          ['Mật khẩu firmware', yesNo(o.firmwarePassword)]
+        ]}
+      />
+      {o.notes.length > 0 && (
+        <ul className="mt-2 space-y-1 text-[11px] text-mist-400">
+          {o.notes.map((n, i) => (
+            <li key={i}>· {n}</li>
+          ))}
+        </ul>
       )}
     </Card>
   )
@@ -208,6 +267,8 @@ export default function SystemInfo() {
           gốc thanh RAM thay thế.
         </p>
       </Card>
+
+      {profile.ownership && <OwnershipCard o={profile.ownership} />}
 
       {profile.storage.map((drive) => (
         <SmartCard key={drive.device} drive={drive} />

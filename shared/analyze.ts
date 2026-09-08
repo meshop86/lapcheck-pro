@@ -7,6 +7,7 @@ import type {
   SystemProfile,
   TestResult,
 } from "./types";
+import { isInternalDisk } from "./diskHealth";
 
 /** Điểm trừ tương ứng từng mức nghiêm trọng, dùng khi rule không chỉ định riêng. */
 const DEFAULT_PENALTY: Record<FindingSeverity, number> = {
@@ -166,7 +167,7 @@ function analyzeBattery(profile: SystemProfile, c: FindingCollector): void {
 
 function analyzeStorage(profile: SystemProfile, c: FindingCollector): void {
   for (const disk of profile.storage) {
-    if (disk.removable) continue;
+    if (!isInternalDisk(disk)) continue;
     const label = disk.model || disk.device;
     const s = disk.smart;
 
@@ -635,6 +636,9 @@ const TEST_PENALTY: Record<string, number> = {
   "memory-test": 18,
   "battery-drain": 10,
   physical: 6,
+  // Hai bai duoi doc tu SystemProfile, findings rieng da tru diem roi nen khong tru them
+  "disk-health": 0,
+  "mac-ownership": 0,
 };
 
 function analyzeTests(results: TestResult[], c: FindingCollector): void {
@@ -725,12 +729,16 @@ export function computeGrade(
   for (const f of findings) {
     if (f.severity === "info") continue;
     // Bài test trượt đã có thang điểm riêng, tránh trừ hai lần
-    const testId = f.code.startsWith("TEST_FAILED_")
-      ? f.code.replace("TEST_FAILED_", "").toLowerCase()
-      : null;
-    const points = testId
-      ? (TEST_PENALTY[testId] ?? DEFAULT_PENALTY[f.severity])
-      : DEFAULT_PENALTY[f.severity];
+    const m = /^TEST_(FAILED|WARN)_(.+)$/.exec(f.code);
+    const fallback = DEFAULT_PENALTY[f.severity];
+    const testPenalty = m ? TEST_PENALTY[m[2].toLowerCase()] : undefined;
+    const points =
+      testPenalty === undefined
+        ? fallback
+        : // Bài chỉ "có lưu ý" không được trừ nặng bằng bài trượt hẳn
+          m?.[1] === "WARN"
+          ? Math.min(fallback, testPenalty)
+          : testPenalty;
     if (points > 0) deductions.push({ reason: f.title, points });
   }
 
@@ -780,6 +788,116 @@ export interface AnalyzeInput {
   stress?: StressResult | null;
 }
 
+/* ------------------------------------------------------------------ */
+/* Khoá máy & quyền sở hữu (macOS)                                     */
+/* ------------------------------------------------------------------ */
+
+function analyzeOwnership(profile: SystemProfile, c: FindingCollector): void {
+  const o = profile.ownership;
+  if (!o) return;
+
+  if (o.depEnrolled) {
+    c.add(
+      "MAC_DEP_ENROLLED",
+      "critical",
+      "Máy nằm trong Apple Business Manager của một tổ chức (DEP)",
+      "Đây là máy công ty. Xoá ổ và cài lại macOS thì khi qua màn hình cài đặt máy vẫn tự động đăng ký lại vào hệ thống quản lý cũ — người mua gần như không dùng được.",
+      o.mdmOrganization ? `Tổ chức: ${o.mdmOrganization}` : "Enrolled via DEP: Yes",
+      "Chỉ mua nếu tổ chức sở hữu đã gỡ máy khỏi Apple Business Manager. Yêu cầu người bán chứng minh bằng hoá đơn thanh lý.",
+    );
+  }
+
+  if (o.mdmEnrolled) {
+    c.add(
+      "MAC_MDM_ENROLLED",
+      "critical",
+      "Máy đang bị quản lý từ xa qua MDM",
+      "Tổ chức quản lý có thể cài phần mềm, khoá máy hoặc xoá dữ liệu từ xa bất cứ lúc nào.",
+      o.mdmOrganization ? `Tổ chức: ${o.mdmOrganization}` : "MDM enrollment: Yes",
+      "Yêu cầu người bán gỡ máy khỏi MDM trước khi giao dịch.",
+    );
+  }
+
+  if (o.activationLocked) {
+    c.add(
+      "MAC_ACTIVATION_LOCK",
+      "critical",
+      "Activation Lock đang bật (khoá iCloud)",
+      "Máy đã bị khoá vào một Apple ID. Không có mật khẩu Apple ID đó thì máy thành cục chặn giấy sau khi xoá.",
+      "Activation Lock Status: Enabled",
+      "Bắt chủ máy đăng xuất iCloud và tắt Find My ngay tại chỗ, rồi kiểm tra lại.",
+    );
+  }
+
+  if (o.icloudAccount) {
+    c.add(
+      o.findMyEnabled ? "MAC_ICLOUD_FINDMY" : "MAC_ICLOUD_SIGNED_IN",
+      o.findMyEnabled ? "major" : "minor",
+      o.findMyEnabled
+        ? "Chủ cũ vẫn đăng nhập iCloud và đang bật Find My"
+        : "Máy vẫn còn tài khoản iCloud đăng nhập",
+      o.findMyEnabled
+        ? "Find My còn bật nghĩa là sau khi xoá máy, Activation Lock sẽ khoá vào Apple ID này."
+        : "Chưa bàn giao sạch. Cần đăng xuất trước khi nhận máy.",
+      `Apple ID: ${o.icloudAccount}`,
+      "Yêu cầu chủ máy đăng xuất iCloud ngay tại chỗ, sau đó chạy lại hạng mục này.",
+    );
+  }
+
+  if (o.managedAppleId) {
+    c.add(
+      "MAC_MANAGED_APPLE_ID",
+      "major",
+      "Apple ID trên máy là Managed Apple ID",
+      "Tài khoản do một tổ chức hoặc trường học cấp, không phải tài khoản cá nhân — dấu hiệu máy thuộc sở hữu tổ chức.",
+      `Apple ID: ${o.icloudAccount ?? "không đọc được"}`,
+      "Xác minh nguồn gốc máy trước khi mua.",
+    );
+  }
+
+  if (o.firmwarePassword) {
+    c.add(
+      "MAC_FIRMWARE_PASSWORD",
+      "major",
+      "Máy đã đặt firmware password",
+      "Không biết mật khẩu này thì không vào được Recovery, không cài lại macOS và không đổi ổ khởi động.",
+      "firmwarepasswd -check: Password Enabled: Yes",
+      "Yêu cầu chủ máy gỡ firmware password trước khi giao máy.",
+    );
+  }
+
+  if (o.configProfiles && o.configProfiles > 0) {
+    c.add(
+      "MAC_CONFIG_PROFILES",
+      "minor",
+      `Máy có ${o.configProfiles} configuration profile đã cài`,
+      "Profile có thể ép cấu hình VPN, proxy, giới hạn cài phần mềm hoặc theo dõi máy.",
+      null,
+      "Gỡ profile trong System Settings → General → Device Management.",
+    );
+  }
+
+  const clean =
+    o.depEnrolled === false &&
+    o.mdmEnrolled === false &&
+    o.activationLocked === false &&
+    !o.icloudAccount;
+  if (clean) {
+    c.add(
+      "MAC_OWNERSHIP_CLEAN",
+      "info",
+      "Máy sạch khoá: không DEP, không MDM, không Activation Lock",
+      "Không phát hiện ràng buộc quyền sở hữu nào. Đây là tình trạng mong muốn khi mua máy cũ.",
+      null,
+      null,
+    );
+  }
+
+  for (const note of o.notes) {
+    c.add("MAC_OWNERSHIP_NOTE", "info", "Dữ liệu khoá máy chưa đầy đủ", note, null, null);
+  }
+}
+
 export function analyze(input: AnalyzeInput): {
   findings: Finding[];
   grade: Grade;
@@ -790,6 +908,7 @@ export function analyze(input: AnalyzeInput): {
   analyzeMemory(input.profile, c);
   analyzeDisplay(input.profile, c);
   analyzeSystem(input.profile, c);
+  analyzeOwnership(input.profile, c);
   if (input.stress) analyzeStress(input.stress, c);
   analyzeTests(input.results, c);
 

@@ -1,4 +1,4 @@
-import type { BatteryInfo, DisplayInfo } from '@shared/types'
+import type { BatteryInfo, DisplayInfo, OwnershipInfo } from '@shared/types'
 import { parseJson, round, run, toNum, toSerial, toStr } from '../util'
 
 /* ------------------------- system_profiler ------------------------- */
@@ -29,7 +29,6 @@ export interface MacMachineExtras {
   bootRom: string
   serial: string
   uuid: string
-  activationLocked: boolean | null
 }
 
 export async function readMachineExtras(): Promise<MacMachineExtras | null> {
@@ -42,10 +41,7 @@ export async function readMachineExtras(): Promise<MacMachineExtras | null> {
     chip: toStr(hw.chip_type),
     bootRom: toStr(hw.boot_rom_version),
     serial: toStr(hw.serial_number),
-    uuid: toStr(hw.platform_UUID),
-    activationLocked: hw.activation_lock_status
-      ? /enabled/i.test(hw.activation_lock_status)
-      : null
+    uuid: toStr(hw.platform_UUID)
   }
 }
 
@@ -353,4 +349,136 @@ export async function readNvmeSmartStatus(): Promise<Record<string, string>> {
     }
   }
   return out
+}
+
+/* --------------------- Khoa may & quyen so huu --------------------- */
+
+interface MobileMeAccount {
+  AccountID?: string
+  isManagedAppleID?: boolean
+  Services?: { Name?: string; status?: string; Enabled?: boolean }[]
+}
+
+/**
+ * Tim thu muc home cua nguoi dang dang nhap man hinh.
+ * Khi app chay bang sudo thi process.env.HOME tro ve /var/root, khong phai nguoi dung that.
+ */
+async function consoleUserHome(): Promise<string | null> {
+  const res = await run('stat', ['-f', '%Su', '/dev/console'], 5_000)
+  const user = toStr(res.stdout).trim()
+  if (!user || user === 'root') return process.env.HOME ?? null
+  const home = await run('dscl', ['.', '-read', `/Users/${user}`, 'NFSHomeDirectory'], 5_000)
+  const m = /NFSHomeDirectory:\s*(\S.*)$/m.exec(home.stdout)
+  return m ? m[1].trim() : `/Users/${user}`
+}
+
+/** Doc tai khoan iCloud dang dang nhap va trang thai Find My Mac. */
+async function readICloud(notes: string[]): Promise<{
+  account: string | null
+  managed: boolean | null
+  findMy: boolean | null
+}> {
+  const home = await consoleUserHome()
+  if (!home) {
+    notes.push('Không xác định được người dùng đang đăng nhập nên chưa đọc được tài khoản iCloud.')
+    return { account: null, managed: null, findMy: null }
+  }
+  const plist = `${home}/Library/Preferences/MobileMeAccounts.plist`
+  const res = await run('plutil', ['-convert', 'json', '-o', '-', plist], 8_000)
+  if (!res.ok) {
+    // Khong co file nghia la chua tung dang nhap iCloud tren tai khoan nay
+    return { account: null, managed: false, findMy: false }
+  }
+  const data = parseJson<{ Accounts?: MobileMeAccount[] }>(res.stdout)
+  const acc = data?.Accounts?.[0]
+  if (!acc) return { account: null, managed: false, findMy: false }
+  const findMy = (acc.Services ?? []).some(
+    (s) => s.Name === 'FIND_MY_MAC' && s.Enabled !== false && s.status !== 'inactive'
+  )
+  return {
+    account: toStr(acc.AccountID) || null,
+    managed: acc.isManagedAppleID ?? null,
+    findMy
+  }
+}
+
+/** Doc trang thai DEP va MDM. Lenh nay chay duoc o quyen thuong. */
+async function readEnrollment(notes: string[]): Promise<{
+  dep: boolean | null
+  mdm: boolean | null
+  org: string | null
+}> {
+  const res = await run('profiles', ['status', '-type', 'enrollment'], 15_000)
+  const out = `${res.stdout}\n${res.stderr}`
+  const yes = (label: string): boolean | null => {
+    const m = new RegExp(`${label}:\\s*(Yes|No)`, 'i').exec(out)
+    return m ? /yes/i.test(m[1]) : null
+  }
+  const dep = yes('Enrolled via DEP')
+  const mdm = yes('MDM enrollment')
+  if (dep === null && mdm === null) {
+    notes.push(`Không đọc được trạng thái MDM/DEP: ${res.error ?? 'lệnh profiles không trả kết quả'}`)
+  }
+
+  // Ten to chuc chi lo ra khi chay bang root
+  let org: string | null = null
+  if (mdm) {
+    const detail = await run('profiles', ['show', '-type', 'enrollment'], 15_000)
+    const m = /OrganizationName\s*=\s*"?([^";\n]+)"?/i.exec(detail.stdout)
+    org = m ? m[1].trim() : null
+    if (!org && /root/i.test(detail.stderr)) {
+      notes.push('Cần chạy app bằng quyền root để xem tên tổ chức đang quản lý máy.')
+    }
+  }
+  return { dep, mdm, org }
+}
+
+/** Dem so configuration profile da cai. Can quyen root. */
+async function readProfileCount(notes: string[]): Promise<number | null> {
+  const res = await run('profiles', ['list', '-all'], 15_000)
+  if (!res.ok) {
+    notes.push('Cần quyền root để liệt kê configuration profile đã cài.')
+    return null
+  }
+  const matches = res.stdout.match(/profileIdentifier/g)
+  return matches ? matches.length : 0
+}
+
+/** Mac Intel: kiem tra firmware password. Apple Silicon khong co khai niem nay. */
+async function readFirmwarePassword(): Promise<boolean | null> {
+  const res = await run('firmwarepasswd', ['-check'], 8_000)
+  if (!res.ok) return null
+  const m = /Password Enabled:\s*(Yes|No)/i.exec(res.stdout)
+  return m ? /yes/i.test(m[1]) : null
+}
+
+export async function readOwnership(): Promise<OwnershipInfo> {
+  const notes: string[] = []
+  const [enrollment, icloud, hw, firmwarePassword] = await Promise.all([
+    readEnrollment(notes),
+    readICloud(notes),
+    profiler<MacHardware[]>('SPHardwareDataType'),
+    readFirmwarePassword()
+  ])
+  const configProfiles = enrollment.mdm ? await readProfileCount(notes) : null
+  const lockStatus = hw?.[0]?.activation_lock_status
+
+  if (!lockStatus) {
+    notes.push(
+      'Máy không báo cáo Activation Lock (thường gặp ở Mac Intel đời trước 2018, không có chip T2).'
+    )
+  }
+
+  return {
+    depEnrolled: enrollment.dep,
+    mdmEnrolled: enrollment.mdm,
+    mdmOrganization: enrollment.org,
+    configProfiles,
+    activationLocked: lockStatus ? /enabled/i.test(lockStatus) : null,
+    icloudAccount: icloud.account,
+    managedAppleId: icloud.managed,
+    findMyEnabled: icloud.findMy,
+    firmwarePassword,
+    notes
+  }
 }

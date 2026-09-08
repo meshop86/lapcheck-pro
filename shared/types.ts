@@ -34,6 +34,34 @@ export interface MachineInfo {
   estimatedManufactureDate: string | null
 }
 
+/**
+ * Tinh trang khoa va quyen so huu may. Hien tai chi macOS cung cap du lieu nay;
+ * Windows tra ve null. Day la nhom rui ro lon nhat khi mua MacBook cu:
+ * may dinh DEP/MDM hoac Activation Lock thi xoa o cai lai van khong dung duoc.
+ */
+export interface OwnershipInfo {
+  /** May nam trong Apple Business Manager cua mot to chuc (Device Enrollment Program) */
+  depEnrolled: boolean | null
+  /** Dang bi mot he thong MDM quan ly tu xa */
+  mdmEnrolled: boolean | null
+  /** Ten to chuc quan ly, chi doc duoc khi chay voi quyen root */
+  mdmOrganization: string | null
+  /** So configuration profile da cai (root moi dem duoc) */
+  configProfiles: number | null
+  /** Activation Lock (khoa iCloud) - chi Mac co chip T2 hoac Apple Silicon moi bao cao */
+  activationLocked: boolean | null
+  /** Apple ID dang dang nhap tren may */
+  icloudAccount: string | null
+  /** Apple ID nay do mot to chuc cap (Managed Apple ID) */
+  managedAppleId: boolean | null
+  /** Find My Mac dang bat -> Activation Lock se kich hoat sau khi xoa may */
+  findMyEnabled: boolean | null
+  /** Mac Intel: da dat firmware password chua */
+  firmwarePassword: boolean | null
+  /** Cac muc khong doc duoc kem ly do, de ky thuat vien biet cho nao con thieu */
+  notes: string[]
+}
+
 export interface CpuInfo {
   manufacturer: string
   brand: string
@@ -223,6 +251,8 @@ export interface SystemProfile {
   graphics: GraphicsController[]
   network: NetworkAdapter[]
   audio: AudioDeviceInfo[]
+  /** Tinh trang khoa may (macOS). Null tren nen tang chua ho tro. */
+  ownership: OwnershipInfo | null
   /** Cac loi khong chan quy trinh, hien thi de ky thuat vien biet du lieu nao thieu */
   warnings: string[]
 }
@@ -268,6 +298,7 @@ export type TestCategory =
   | 'battery'
   | 'connectivity'
   | 'physical'
+  | 'ownership'
 
 export type TestStatus = 'pending' | 'running' | 'passed' | 'warning' | 'failed' | 'skipped'
 
