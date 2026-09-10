@@ -276,24 +276,41 @@ interface WinReliability {
   PowerOnHours?: number
   Wear?: number
   ReadErrorsTotal?: number
+  ReadErrorsUncorrected?: number
   WriteErrorsTotal?: number
+  WriteErrorsUncorrected?: number
   StartStopCycleCount?: number
   HealthStatus?: string
 }
 
+/**
+ * Get-StorageReliabilityCounter tra ve 0 cho moi chi so ma driver khong ho tro,
+ * khong phan biet duoc voi mot o hoan toan moi. Neu ca gio chay, do mon lan nhiet do
+ * deu bang 0 thi bo dem nay khong co that -> phai coi la chua doc duoc, neu khong
+ * may nao cung duoc cham 100/100.
+ */
+function reliabilitySupported(row: WinReliability): boolean {
+  return Boolean(toNum(row.PowerOnHours) || toNum(row.Wear) || toNum(row.Temperature))
+}
+
 export function fromWindowsReliability(row: WinReliability | null): SmartData {
   if (!row) return emptySmart('Không đọc được chỉ số tin cậy từ Windows Storage API')
+  const supported = reliabilitySupported(row)
+  // ReadErrorsTotal tinh ca loi da duoc ECC sua xong; chi loi khong sua duoc moi la dau hieu hong
+  const uncorrectable = toNum(row.ReadErrorsUncorrected) ?? toNum(row.WriteErrorsUncorrected)
   return {
     ...emptySmart(),
     available: true,
     source: 'wmi',
     healthy: row.HealthStatus ? /healthy/i.test(row.HealthStatus) : null,
-    powerOnHours: toNum(row.PowerOnHours),
-    powerCycles: toNum(row.StartStopCycleCount),
-    percentageUsed: toNum(row.Wear),
-    temperatureC: toNum(row.Temperature),
-    uncorrectableErrors: toNum(row.ReadErrorsTotal),
-    error: null
+    powerOnHours: supported ? toNum(row.PowerOnHours) : null,
+    powerCycles: toNum(row.StartStopCycleCount) || null,
+    percentageUsed: supported ? toNum(row.Wear) : null,
+    temperatureC: supported ? toNum(row.Temperature) || null : null,
+    uncorrectableErrors: supported ? uncorrectable : null,
+    error: supported
+      ? null
+      : 'Windows không cung cấp giờ chạy và độ mòn cho ổ này. Cài smartmontools để đọc SMART đầy đủ.'
   }
 }
 

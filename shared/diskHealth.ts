@@ -161,24 +161,35 @@ export function assessDisk(device: StorageDevice): DiskHealth {
     })
   }
 
-  // Khong co so lieu hao mon thi khong duoc phep cham diem tuyet doi
-  if (!hasWearData) score = Math.min(score, 75)
+  // Chi co trang thai "OK" thi khong du de cham diem. Bia ra mot con so o day chinh la
+  // ly do moi may deu hien 100/100 - tha noi thang la chua doc du du lieu.
+  const scored = hasWearData || s.healthy === false ? score : null
 
   const verdict: DiskVerdict =
-    s.healthy === false || score < 40 ? 'failing' : score < 60 ? 'poor' : score < 80 ? 'fair' : 'good'
+    s.healthy === false
+      ? 'failing'
+      : scored === null
+        ? 'unknown'
+        : scored < 40
+          ? 'failing'
+          : scored < 60
+            ? 'poor'
+            : scored < 80
+              ? 'fair'
+              : 'good'
 
   const summary =
     verdict === 'failing'
       ? 'Ổ sắp hỏng, cần thay trước khi bán máy'
       : verdict === 'poor'
         ? 'Ổ đã xuống cấp rõ rệt, nên trừ giá'
-        : !hasWearData
+        : verdict === 'unknown'
           ? 'Ổ báo bình thường nhưng thiếu số liệu hao mòn để kết luận'
           : verdict === 'fair'
             ? 'Ổ còn dùng được nhưng đã có hao mòn'
             : 'Ổ còn khoẻ, không có dấu hiệu bất thường'
 
-  return { device, score, verdict, summary, issues, driveWrites }
+  return { device, score: scored, verdict, summary, issues, driveWrites }
 }
 
 /** O ao (file .dmg, .vhd) va o cam ngoai khong phai phan cung cua may. */

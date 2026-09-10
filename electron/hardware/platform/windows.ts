@@ -276,7 +276,9 @@ foreach ($d in Get-PhysicalDisk) {
     PowerOnHours = $c.PowerOnHours
     Wear = $c.Wear
     ReadErrorsTotal = $c.ReadErrorsTotal
+    ReadErrorsUncorrected = $c.ReadErrorsUncorrected
     WriteErrorsTotal = $c.WriteErrorsTotal
+    WriteErrorsUncorrected = $c.WriteErrorsUncorrected
     StartStopCycleCount = $c.StartStopCycleCount
   }
 }
