@@ -42,6 +42,9 @@ function createWindow(): BrowserWindow {
 }
 
 app.whenReady().then(() => {
+  // Windows lay ten hien tren thanh tac vu va thong bao tu ID nay
+  app.setAppUserModelId('com.chiplaptest.app')
+
   // Bài test micro và webcam cần quyền truy cập thiết bị
   session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
     callback(['media', 'fullscreen', 'pointerLock'].includes(permission))
