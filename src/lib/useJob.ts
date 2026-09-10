@@ -5,7 +5,7 @@ import type { ProgressEvent } from '@shared/types'
 export function useJobProgress(jobId: string): ProgressEvent | null {
   const [progress, setProgress] = useState<ProgressEvent | null>(null)
   useEffect(() => {
-    return window.lapcheck.onProgress((event) => {
+    return window.chipLapTest.onProgress((event) => {
       if (event.jobId === jobId) setProgress(event)
     })
   }, [jobId])

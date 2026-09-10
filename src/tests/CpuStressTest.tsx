@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Flame, StopCircle } from "lucide-react";
 import type { StressResult } from "@shared/types";
 import { Button, ProgressBar, SensorChart, StatTile } from "@/components/ui";
@@ -33,6 +33,15 @@ export default function CpuStressTest({ onFinish, onClose }: TestPanelProps) {
   // Mở luồng cảm biến khi đang ép tải để vẽ đồ thị nhiệt theo thời gian thực
   useSensorStream(running);
 
+  // Đóng panel giữa chừng phải hủy job, nếu không worker vẫn ép CPU 100% mãi
+  const runningRef = useRef(running);
+  runningRef.current = running;
+  useEffect(() => {
+    return () => {
+      if (runningRef.current) void window.chipLapTest.cancelJob(JOB_ID);
+    };
+  }, []);
+
   const threads = profile?.cpu.logicalCores ?? 4;
   const liveData = running
     ? sensorHistory.slice(-180)
@@ -45,7 +54,7 @@ export default function CpuStressTest({ onFinish, onClose }: TestPanelProps) {
     setError("");
     setResult(null);
     try {
-      const data = await window.lapcheck.runCpuStress(JOB_ID, {
+      const data = await window.chipLapTest.runCpuStress(JOB_ID, {
         durationSec,
         threads,
       });
@@ -78,6 +87,10 @@ export default function CpuStressTest({ onFinish, onClose }: TestPanelProps) {
         result.throttlePercent !== null
           ? `${result.throttlePercent.toFixed(0)}%`
           : "—",
+      "Tụt hiệu năng":
+        result.perfDropPercent !== null
+          ? `${result.perfDropPercent.toFixed(0)}%`
+          : "—",
       "Áp lực nhiệt": thermalPressureLabel(pressure),
       "Lỗi tính toán": result.errors,
     };
@@ -85,13 +98,18 @@ export default function CpuStressTest({ onFinish, onClose }: TestPanelProps) {
     const temp = result.maxCpuTempC;
     const throttle = result.throttlePercent ?? 0;
     const rank = thermalPressureRank(pressure);
+    // Tut hieu nang do truc tiep tu thong luong nen luon co so lieu, ke ca khi
+    // may khong cho doc nhiet do (macOS can quyen root moi doc duoc powermetrics)
+    const perfDrop = result.perfDropPercent;
     // Mo ta phan nhiet: uu tien nhiet do that, thieu thi dung ap luc nhiet
     const heat =
       temp !== null
         ? `nhiệt tối đa ${temp.toFixed(0)} °C`
         : pressure
           ? `áp lực nhiệt ${pressure}`
-          : "máy không cho đọc nhiệt độ";
+          : perfDrop !== null
+            ? `hiệu năng tụt ${perfDrop.toFixed(0)}%`
+            : "máy không cho đọc nhiệt độ";
 
     if (result.errors > 0) {
       onFinish(
@@ -99,14 +117,27 @@ export default function CpuStressTest({ onFinish, onClose }: TestPanelProps) {
         `${result.errors} lỗi tính toán — CPU hoặc RAM không ổn định`,
         metrics,
       );
-    } else if ((temp !== null && temp >= 98) || rank >= 3) {
+    } else if (
+      (temp !== null && temp >= 98) ||
+      rank >= 3 ||
+      (perfDrop !== null && perfDrop >= 40)
+    ) {
       onFinish(
         "failed",
         `Quá nóng khi ép tải (${heat}) — cần vệ sinh và thay keo tản nhiệt`,
         metrics,
       );
-    } else if ((temp !== null && temp >= 92) || throttle >= 35 || rank === 2) {
-      onFinish("warning", `${heat}, tụt xung ${throttle.toFixed(0)}%`, metrics);
+    } else if (
+      (temp !== null && temp >= 92) ||
+      throttle >= 35 ||
+      rank === 2 ||
+      (perfDrop !== null && perfDrop >= 20)
+    ) {
+      onFinish(
+        "warning",
+        `${heat}${perfDrop !== null ? `, hiệu năng tụt ${perfDrop.toFixed(0)}%` : ""}`,
+        metrics,
+      );
     } else {
       onFinish(
         "passed",
@@ -145,7 +176,7 @@ export default function CpuStressTest({ onFinish, onClose }: TestPanelProps) {
         {running ? (
           <Button
             variant="danger"
-            onClick={() => window.lapcheck.cancelJob(JOB_ID)}
+            onClick={() => window.chipLapTest.cancelJob(JOB_ID)}
           >
             <StopCircle size={14} />
             Dừng sớm
@@ -174,7 +205,7 @@ export default function CpuStressTest({ onFinish, onClose }: TestPanelProps) {
       )}
 
       {result && (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-5 gap-2">
           <StatTile
             label={
               result.maxCpuTempC !== null ? "Nhiệt tối đa" : "Áp lực nhiệt"
@@ -211,6 +242,22 @@ export default function CpuStressTest({ onFinish, onClose }: TestPanelProps) {
               result.startFreqGHz && result.minFreqGHz
                 ? `${result.startFreqGHz.toFixed(2)} → ${result.minFreqGHz.toFixed(2)} GHz`
                 : undefined
+            }
+          />
+          <StatTile
+            label="Tụt hiệu năng"
+            value={
+              result.perfDropPercent !== null
+                ? `${result.perfDropPercent.toFixed(0)}%`
+                : "—"
+            }
+            hint="đo bằng thông lượng thật"
+            tone={
+              (result.perfDropPercent ?? 0) >= 40
+                ? "bad"
+                : (result.perfDropPercent ?? 0) >= 20
+                  ? "warn"
+                  : "good"
             }
           />
           <StatTile

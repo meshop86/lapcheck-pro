@@ -143,7 +143,7 @@ export async function runDiskBenchmark(
   const sizeBytes = fileSizeMB * MB
 
   await mkdir(options.targetDir, { recursive: true })
-  const path = join(options.targetDir, `lapcheck-bench-${Date.now()}.tmp`)
+  const path = join(options.targetDir, `chiplaptest-bench-${Date.now()}.tmp`)
   const start = performance.now()
 
   try {

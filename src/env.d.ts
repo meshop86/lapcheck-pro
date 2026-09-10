@@ -1,9 +1,9 @@
 /// <reference types="vite/client" />
-import type { LapCheckApi } from '../electron/preload'
+import type { ChipLapTestApi } from '../electron/preload'
 
 declare global {
   interface Window {
-    lapcheck: LapCheckApi
+    chipLapTest: ChipLapTestApi
   }
 }
 

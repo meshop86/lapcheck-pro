@@ -12,7 +12,7 @@ function safeFileName(inspection: Inspection): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, 40)
   const date = inspection.createdAt.slice(0, 10)
-  return `LapCheck-${label || 'laptop'}-${date}-${inspection.id.slice(0, 6)}.pdf`
+  return `chipLapTest-${label || 'laptop'}-${date}-${inspection.id.slice(0, 6)}.pdf`
 }
 
 /**

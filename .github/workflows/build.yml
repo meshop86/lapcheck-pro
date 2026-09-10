@@ -16,10 +16,10 @@ jobs:
         include:
           - os: windows-latest
             platform: --win
-            artifact: LapCheck-Pro-windows-setup
+            artifact: chipLapTest-windows-setup
           - os: macos-latest
             platform: --mac
-            artifact: LapCheck-Pro-macos-dmg
+            artifact: chipLapTest-macos-dmg
 
     runs-on: ${{ matrix.os }}
 

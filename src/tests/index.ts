@@ -12,6 +12,7 @@ import DiskHealthTest from './DiskHealthTest'
 import OwnershipTest from './OwnershipTest'
 import MemoryTestPanel from './MemoryTestPanel'
 import CpuStressTest from './CpuStressTest'
+import GpuStressTest from './GpuStressTest'
 import BatteryDrainTest from './BatteryDrainTest'
 import { PhysicalTest, PortsTest } from './ManualChecklist'
 import type { TestPanelProps } from './types'
@@ -30,6 +31,7 @@ export const TEST_PANELS: Record<string, ComponentType<TestPanelProps>> = {
   'disk-benchmark': DiskBenchTest,
   'memory-test': MemoryTestPanel,
   'cpu-stress': CpuStressTest,
+  'gpu-stress': GpuStressTest,
   'battery-drain': BatteryDrainTest,
   ports: PortsTest,
   physical: PhysicalTest,

@@ -26,7 +26,7 @@ export default function MemoryTestPanel({ onFinish, onClose }: TestPanelProps) {
     setError('')
     setResult(null)
     try {
-      setResult(await window.lapcheck.runMemoryTest(JOB_ID, { sizeMB, passes }))
+      setResult(await window.chipLapTest.runMemoryTest(JOB_ID, { sizeMB, passes }))
     } catch (err) {
       setError((err as Error).message)
     } finally {

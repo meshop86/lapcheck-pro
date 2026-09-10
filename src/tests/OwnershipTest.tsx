@@ -111,7 +111,7 @@ export default function OwnershipTest({ onFinish, onClose }: TestPanelProps) {
     setError(null)
     try {
       // Doc lai tu dau: ky thuat vien thuong bat chu may dang xuat iCloud roi kiem tra lai
-      const fresh = await window.lapcheck.getSystemProfile(true)
+      const fresh = await window.chipLapTest.getSystemProfile(true)
       setOwnership(fresh.ownership)
       await setProfile()
     } catch (err) {

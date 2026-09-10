@@ -633,6 +633,7 @@ const TEST_PENALTY: Record<string, number> = {
   ports: 8,
   "disk-benchmark": 8,
   "cpu-stress": 15,
+  "gpu-stress": 12,
   "memory-test": 18,
   "battery-drain": 10,
   physical: 6,

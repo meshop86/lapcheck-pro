@@ -15,7 +15,7 @@ export default function HistoryPage() {
     setLoading(true)
     setError('')
     try {
-      setRows(await window.lapcheck.listInspections())
+      setRows(await window.chipLapTest.listInspections())
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -29,7 +29,7 @@ export default function HistoryPage() {
 
   async function openDetail(id: string): Promise<void> {
     try {
-      setDetail(await window.lapcheck.getInspection(id))
+      setDetail(await window.chipLapTest.getInspection(id))
     } catch (err) {
       setError((err as Error).message)
     }
@@ -38,10 +38,10 @@ export default function HistoryPage() {
   async function exportPdf(id: string): Promise<void> {
     setBusyId(id)
     try {
-      const inspection = await window.lapcheck.getInspection(id)
+      const inspection = await window.chipLapTest.getInspection(id)
       if (!inspection) return
-      const path = await window.lapcheck.exportPdf(inspection)
-      await window.lapcheck.openPath(path)
+      const path = await window.chipLapTest.exportPdf(inspection)
+      await window.chipLapTest.openPath(path)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -52,7 +52,7 @@ export default function HistoryPage() {
   async function remove(id: string): Promise<void> {
     if (!window.confirm(`Xoá phiếu ${id}? Thao tác này không hoàn tác được.`)) return
     try {
-      await window.lapcheck.deleteInspection(id)
+      await window.chipLapTest.deleteInspection(id)
       await load()
     } catch (err) {
       setError((err as Error).message)

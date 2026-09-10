@@ -52,7 +52,7 @@ export default function Report() {
     setBusy('save')
     setError('')
     try {
-      const id = await window.lapcheck.saveInspection(inspection)
+      const id = await window.chipLapTest.saveInspection(inspection)
       setSavedId(id)
       setMessage(`Đã lưu phiếu kiểm định ${id}`)
     } catch (err) {
@@ -68,9 +68,9 @@ export default function Report() {
     setBusy('pdf')
     setError('')
     try {
-      await window.lapcheck.saveInspection(inspection)
+      await window.chipLapTest.saveInspection(inspection)
       setSavedId(inspection.id)
-      const path = await window.lapcheck.exportPdf(inspection)
+      const path = await window.chipLapTest.exportPdf(inspection)
       setPdfPath(path)
       setMessage(`Đã xuất báo cáo: ${path}`)
     } catch (err) {
@@ -114,7 +114,7 @@ export default function Report() {
           <span>{message}</span>
           {pdfPath && (
             <button
-              onClick={() => void window.lapcheck.openPath(pdfPath)}
+              onClick={() => void window.chipLapTest.openPath(pdfPath)}
               className="flex items-center gap-1 text-xs underline"
             >
               <FolderOpen size={12} />

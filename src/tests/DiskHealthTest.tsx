@@ -50,7 +50,7 @@ export default function DiskHealthTest({ onFinish, onClose }: TestPanelProps) {
     setLoading(true)
     setError(null)
     try {
-      const fresh = await window.lapcheck.getSystemProfile(true)
+      const fresh = await window.chipLapTest.getSystemProfile(true)
       setDisks(assessDisks(fresh.storage))
       await refreshProfile()
     } catch (err) {

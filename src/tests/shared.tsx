@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui'
 
@@ -15,18 +15,23 @@ export function FullscreenLayer({
   onExit: () => void
   background?: string
 }) {
+  // Giu onExit trong ref: neu de vao deps thi moi lan click lam re-render se
+  // chay lai effect -> thoat roi vao lai fullscreen, man hinh nhap nhay
+  const exitRef = useRef(onExit)
+  exitRef.current = onExit
+
   useEffect(() => {
     const el = document.documentElement
     void el.requestFullscreen?.().catch(() => undefined)
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onExit()
+      if (e.key === 'Escape') exitRef.current()
     }
     window.addEventListener('keydown', onKey)
     return () => {
       window.removeEventListener('keydown', onKey)
       if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined)
     }
-  }, [onExit])
+  }, [])
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden" style={{ background }}>

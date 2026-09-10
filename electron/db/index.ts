@@ -26,7 +26,7 @@ let db: DatabaseSync | null = null
 export function initDatabase(userDataDir: string): DatabaseSync {
   if (db) return db
   mkdirSync(userDataDir, { recursive: true })
-  db = new DatabaseSync(join(userDataDir, 'lapcheck.db'))
+  db = new DatabaseSync(join(userDataDir, 'chiplaptest.db'))
   db.exec('PRAGMA journal_mode = WAL')
   db.exec(SCHEMA)
   return db

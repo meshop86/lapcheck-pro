@@ -113,6 +113,15 @@ export const TEST_CATALOG: TestDefinition[] = [
     durationHint: '5–15 phút'
   },
   {
+    id: 'gpu-stress',
+    name: 'Stress test GPU',
+    category: 'thermal',
+    kind: 'automated',
+    purpose:
+      'Ép card đồ hoạ dựng hình liên tục để lộ card rời yếu, tản nhiệt kém hoặc GPU đã từng bị đào coin.',
+    durationHint: '3–10 phút'
+  },
+  {
     id: 'battery-drain',
     name: 'Đo xả pin thực tế',
     category: 'battery',

@@ -403,7 +403,7 @@ export function renderReportHtml(inspection: Inspection): string {
 
 <div class="header">
   <div>
-    <div class="brand">LapCheck Pro · Phần mềm kiểm định laptop</div>
+    <div class="brand">chipLapTest · Phần mềm kiểm định laptop</div>
     <h1>Phiếu kiểm định tình trạng máy</h1>
     <div style="color:#475569">${esc(inspection.meta.deviceLabel || `${m.manufacturer} ${m.model}`)} · ${conditionLabel}</div>
   </div>
@@ -465,7 +465,7 @@ ${p.warnings.length ? `<div class="warn"><strong>Giới hạn của lần đo n�
 </div>
 
 <div class="footer">
-  <span>LapCheck Pro v${esc(p.appVersion)} · Dữ liệu đọc trực tiếp từ phần cứng lúc ${esc(dateVN(p.collectedAt))}</span>
+  <span>chipLapTest v${esc(p.appVersion)} · Dữ liệu đọc trực tiếp từ phần cứng lúc ${esc(dateVN(p.collectedAt))}</span>
   <span>Mã phiếu ${esc(inspection.id)}</span>
 </div>
 

@@ -417,8 +417,23 @@ export interface StressResult {
   minFreqGHz: number | null
   /** % tut xung so voi luc bat dau -> dau hieu throttling do nhiet */
   throttlePercent: number | null
+  /**
+   * % suy giam thong luong tinh toan giua dau va cuoi bai test.
+   * Do truc tiep tu hieu nang thuc, khong can quyen doc cam bien -> luon co so lieu.
+   */
+  perfDropPercent: number | null
+  /** Thong luong theo tung giay, dung ve do thi tut hieu nang */
+  perfTimeline: PerfSample[]
   errors: number
   timeline: SensorSnapshot[]
+}
+
+/** Mot lat cat thong luong tinh toan trong luc ep tai. */
+export interface PerfSample {
+  /** Giay thu may ke tu luc bat dau */
+  atSec: number
+  /** Trieu phep tinh moi giay cua toan bo cac luong */
+  mops: number
 }
 
 export interface MemoryTestOptions {

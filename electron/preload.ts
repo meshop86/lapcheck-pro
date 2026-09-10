@@ -61,6 +61,6 @@ const api = {
   openExternal: (url: string): void => ipcRenderer.send(IPC.shellOpenExternal, url)
 }
 
-export type LapCheckApi = typeof api
+export type ChipLapTestApi = typeof api
 
-contextBridge.exposeInMainWorld('lapcheck', api)
+contextBridge.exposeInMainWorld('chipLapTest', api)

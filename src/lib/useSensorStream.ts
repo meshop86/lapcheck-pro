@@ -9,6 +9,6 @@ export function useSensorStream(active: boolean): void {
   const pushSensor = useAppStore((s) => s.pushSensor)
   useEffect(() => {
     if (!active) return
-    return window.lapcheck.startSensorStream(pushSensor)
+    return window.chipLapTest.startSensorStream(pushSensor)
   }, [active, pushSensor])
 }

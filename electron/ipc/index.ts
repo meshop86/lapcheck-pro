@@ -50,7 +50,7 @@ function progressReporter(event: Electron.IpcMainInvokeEvent, jobId: string) {
 }
 
 export function reportsDir(): string {
-  return join(app.getPath('documents'), 'LapCheck Reports')
+  return join(app.getPath('documents'), 'chipLapTest Reports')
 }
 
 /** Thư mục chứa công cụ đi kèm (smartctl...) khi app đã đóng gói. */

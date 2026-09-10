@@ -49,7 +49,7 @@ export default function DiskBenchTest({ onFinish, onClose }: TestPanelProps) {
     setError('')
     setResult(null)
     try {
-      const data = await window.lapcheck.runDiskBenchmark(JOB_ID, {
+      const data = await window.chipLapTest.runDiskBenchmark(JOB_ID, {
         targetDir: '',
         fileSizeMB: sizeMB,
         blockSizeKB: 1024

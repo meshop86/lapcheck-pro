@@ -93,8 +93,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ profileLoading: true, profileError: null })
     try {
       const [appInfo, profile] = await Promise.all([
-        window.lapcheck.getAppInfo(),
-        window.lapcheck.getSystemProfile(false)
+        window.chipLapTest.getAppInfo(),
+        window.chipLapTest.getSystemProfile(false)
       ])
       const deviceLabel = `${profile.machine.manufacturer} ${profile.machine.model}`.trim()
       set((state) => ({
@@ -111,7 +111,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   refreshProfile: async () => {
     set({ profileLoading: true, profileError: null })
     try {
-      set({ profile: await window.lapcheck.getSystemProfile(true), profileLoading: false })
+      set({ profile: await window.chipLapTest.getSystemProfile(true), profileLoading: false })
     } catch (err) {
       set({ profileLoading: false, profileError: (err as Error).message })
     }

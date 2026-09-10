@@ -35,7 +35,7 @@ export default function BatteryDrainTest({ onFinish, onClose }: TestPanelProps) 
 
     async function sample(): Promise<void> {
       try {
-        const snapshot: SensorSnapshot = await window.lapcheck.getSensorSnapshot()
+        const snapshot: SensorSnapshot = await window.chipLapTest.getSensorSnapshot()
         if (cancelled || snapshot.batteryPercent === null) return
         setSamples((prev) => [
           ...prev,

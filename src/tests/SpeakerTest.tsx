@@ -25,30 +25,43 @@ const TONES = [
 export default function SpeakerTest({ onFinish, onClose }: TestPanelProps) {
   const ctxRef = useRef<AudioContext | null>(null)
   const stopRef = useRef<(() => void) | null>(null)
-  const [volume, setVolume] = useState(0.35)
+  const timerRef = useRef<number | null>(null)
+  const [volume, setVolume] = useState(0.6)
   const [playing, setPlaying] = useState('')
   const [played, setPlayed] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     return () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current)
       stopRef.current?.()
       void ctxRef.current?.close()
     }
   }, [])
 
-  function context(): AudioContext {
+  /**
+   * Phai cho AudioContext resume xong roi moi dung do thi am thanh.
+   * Neu context con 'suspended' thi currentTime dung yen, envelope bi len lich
+   * vao qua khu va tieng dau tien khong bao gio phat ra.
+   */
+  async function context(): Promise<AudioContext> {
     if (!ctxRef.current || ctxRef.current.state === 'closed') {
       ctxRef.current = new AudioContext()
     }
-    void ctxRef.current.resume()
+    if (ctxRef.current.state !== 'running') await ctxRef.current.resume()
     return ctxRef.current
   }
 
   /** Dựng chuỗi oscillator → gain → panner và trả về hàm dừng. */
-  function startNode(channel: Channel): { ctx: AudioContext; osc: OscillatorNode; stop: () => void } {
+  async function startNode(
+    channel: Channel,
+    frequencyHz: number
+  ): Promise<{ ctx: AudioContext; osc: OscillatorNode; stop: () => void }> {
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current)
     stopRef.current?.()
-    const ctx = context()
+    const ctx = await context()
     const osc = ctx.createOscillator()
+    // Dat tan so truoc khi start, neu khong se co mot nhip 440 Hz mac dinh loe ra
+    osc.frequency.setValueAtTime(frequencyHz, ctx.currentTime)
     const gain = ctx.createGain()
     const panner = ctx.createStereoPanner()
     panner.pan.value = channel === 'left' ? -1 : channel === 'right' ? 1 : 0
@@ -74,21 +87,19 @@ export default function SpeakerTest({ onFinish, onClose }: TestPanelProps) {
     return { ctx, osc, stop }
   }
 
-  function playTone(hz: number, channel: Channel, id: string): void {
-    const { osc, stop } = startNode(channel)
-    osc.frequency.value = hz
+  async function playTone(hz: number, channel: Channel, id: string): Promise<void> {
+    const { stop } = await startNode(channel, hz)
     setPlaying(id)
     setPlayed((prev) => new Set(prev).add(id))
-    window.setTimeout(stop, 2000)
+    timerRef.current = window.setTimeout(stop, 2500)
   }
 
-  function playSweep(channel: Channel, id: string): void {
-    const { ctx, osc, stop } = startNode(channel)
-    osc.frequency.setValueAtTime(60, ctx.currentTime)
+  async function playSweep(channel: Channel, id: string): Promise<void> {
+    const { ctx, osc, stop } = await startNode(channel, 60)
     osc.frequency.exponentialRampToValueAtTime(15000, ctx.currentTime + 6)
     setPlaying(id)
     setPlayed((prev) => new Set(prev).add(id))
-    window.setTimeout(stop, 6200)
+    timerRef.current = window.setTimeout(stop, 6200)
   }
 
   const channelButton = (channel: Channel, label: string) => {
@@ -97,7 +108,7 @@ export default function SpeakerTest({ onFinish, onClose }: TestPanelProps) {
       <Button
         key={id}
         variant={playing === id ? 'success' : 'ghost'}
-        onClick={() => (playing === id ? stopRef.current?.() : playSweep(channel, id))}
+        onClick={() => (playing === id ? stopRef.current?.() : void playSweep(channel, id))}
       >
         <Volume2 size={14} />
         {label}
@@ -110,6 +121,8 @@ export default function SpeakerTest({ onFinish, onClose }: TestPanelProps) {
       <Instruction>
         Bật âm lượng hệ thống khoảng 70%. Nghe từng bên riêng để chắc không bị mất kênh, rồi quét
         dải tần để phát hiện màng loa rách (tiếng rè ở dải cao) hay loa bị hở (rè ở dải trầm).
+        Lưu ý: loa laptop hầu như không tái tạo được 100 Hz — nghe rất nhỏ hoặc chỉ thấy rung là
+        bình thường, đừng chấm lỗi. Dùng nút quét dải tần để nghe rõ sự khác biệt.
       </Instruction>
 
       <div className="flex items-center gap-3">
@@ -138,7 +151,7 @@ export default function SpeakerTest({ onFinish, onClose }: TestPanelProps) {
       </div>
 
       <div>
-        <p className="mb-2 text-xs text-mist-400">Tần số cố định (2 giây mỗi lần)</p>
+        <p className="mb-2 text-xs text-mist-400">Tần số cố định (2,5 giây mỗi lần)</p>
         <div className="grid grid-cols-2 gap-2">
           {TONES.map((t) => {
             const id = `tone-${t.hz}`
@@ -146,7 +159,7 @@ export default function SpeakerTest({ onFinish, onClose }: TestPanelProps) {
               <Button
                 key={id}
                 variant={playing === id ? 'success' : 'ghost'}
-                onClick={() => playTone(t.hz, 'both', id)}
+                onClick={() => void playTone(t.hz, 'both', id)}
               >
                 {t.label}
               </Button>
@@ -175,7 +188,18 @@ export default function SpeakerTest({ onFinish, onClose }: TestPanelProps) {
         }}
       />
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {playing && (
+          <Button
+            variant="danger"
+            onClick={() => {
+              if (timerRef.current !== null) window.clearTimeout(timerRef.current)
+              stopRef.current?.()
+            }}
+          >
+            Dừng phát
+          </Button>
+        )}
         <Button onClick={onClose}>Đóng</Button>
       </div>
     </div>

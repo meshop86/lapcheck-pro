@@ -1,11 +1,14 @@
 import os from 'node:os'
 import { Worker } from 'node:worker_threads'
 import { performance } from 'node:perf_hooks'
-import type { SensorSnapshot, StressOptions, StressResult } from '@shared/types'
+import type { PerfSample, SensorSnapshot, StressOptions, StressResult } from '@shared/types'
 import { readSensors } from '../hardware/sensors'
 import { round } from '../hardware/util'
 
 export type ProgressFn = (phase: string, percent: number, message: string) => void
+
+/** Moi worker bao cao thong luong sau moi khoang nay. */
+const SAMPLE_MS = 1000
 
 /**
  * Vong lap tinh toan nang chay trong worker.
@@ -32,24 +35,82 @@ function computeBlock(seed) {
   return hash >>> 0
 }
 
-const endAt = Date.now() + workerData.durationMs
+const startedAt = Date.now()
+const endAt = startedAt + workerData.durationMs
 const expected = computeBlock(workerData.seed)
 let ops = BLOCK_ITERATIONS
 let mismatches = 0
 
+// Thong luong duoc chot theo tung cua so thoi gian de nhin ra luc may bat dau tut
+let windowOps = 0
+let windowStart = Date.now()
+
 while (Date.now() < endAt) {
   if (computeBlock(workerData.seed) !== expected) mismatches++
   ops += BLOCK_ITERATIONS
+  windowOps += BLOCK_ITERATIONS
+
+  const now = Date.now()
+  if (now - windowStart >= ${SAMPLE_MS}) {
+    parentPort.postMessage({
+      type: 'sample',
+      atSec: Math.round((now - startedAt) / 1000),
+      ops: windowOps,
+      ms: now - windowStart
+    })
+    windowOps = 0
+    windowStart = now
+  }
 }
 
 parentPort.postMessage({ type: 'done', ops, checksum: expected, mismatches })
 `
 
-interface WorkerMessage {
-  type: 'done'
-  ops: number
-  checksum: number
-  mismatches: number
+type WorkerMessage =
+  | { type: 'done'; ops: number; checksum: number; mismatches: number }
+  | { type: 'sample'; atSec: number; ops: number; ms: number }
+
+/** Cong don thong luong cua moi worker vao dung giay tuong ung. */
+class PerfCollector {
+  private buckets = new Map<number, { ops: number; ms: number; reports: number }>()
+
+  add(atSec: number, ops: number, ms: number): void {
+    const bucket = this.buckets.get(atSec) ?? { ops: 0, ms: 0, reports: 0 }
+    bucket.ops += ops
+    bucket.ms += ms
+    bucket.reports++
+    this.buckets.set(atSec, bucket)
+  }
+
+  timeline(): PerfSample[] {
+    return [...this.buckets.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([atSec, b]) => {
+        // ms la tong cua nhieu worker chay song song, chia lai de ra thoi gian thuc
+        const wallMs = b.ms / b.reports
+        return { atSec, mops: round(b.ops / (wallMs * 1000), 2) ?? 0 }
+      })
+      .filter((s) => s.mops > 0)
+  }
+}
+
+/**
+ * So thong luong on dinh luc dau voi luc cuoi.
+ * Bo 2 mau dau (may con dang tang toc) va lay trung vi tung nua de khong bi
+ * mot nhip nhieu lam sai ket qua.
+ */
+function perfDrop(timeline: PerfSample[]): number | null {
+  const samples = timeline.slice(2)
+  if (samples.length < 6) return null
+  const median = (list: number[]): number => {
+    const sorted = [...list].sort((a, b) => a - b)
+    return sorted[Math.floor(sorted.length / 2)]
+  }
+  const half = Math.floor(samples.length / 2)
+  const early = median(samples.slice(0, half).map((s) => s.mops))
+  const late = median(samples.slice(half).map((s) => s.mops))
+  if (!early) return null
+  return round(Math.max(0, ((early - late) / early) * 100), 1)
 }
 
 export async function runCpuStress(
@@ -62,6 +123,7 @@ export async function runCpuStress(
   const durationMs = durationSec * 1000
   const seed = 1.618033
   const timeline: SensorSnapshot[] = []
+  const perf = new PerfCollector()
   const startedAt = performance.now()
 
   const sampler = setInterval(() => {
@@ -101,7 +163,9 @@ export async function runCpuStress(
         workers.push(worker)
         return new Promise<void>((resolve) => {
           worker.on('message', (msg: WorkerMessage) => {
-            if (msg.type === 'done') {
+            if (msg.type === 'sample') {
+              perf.add(msg.atSec, msg.ops, msg.ms)
+            } else if (msg.type === 'done') {
               totalOps += msg.ops
               errors += msg.mismatches
               checksums.push(msg.checksum)
@@ -119,6 +183,8 @@ export async function runCpuStress(
     clearInterval(sampler)
     clearInterval(progressTimer)
     signal?.removeEventListener('abort', abort)
+    // Chac chan khong con worker nao con song sau khi ham nay tra ve
+    await Promise.all(workers.map((w) => w.terminate().catch(() => 0)))
   }
 
   // Cac worker chay cung mot khoi tinh toan -> checksum phai trung nhau
@@ -134,6 +200,7 @@ export async function runCpuStress(
   const minFreq = freqs.length ? Math.min(...freqs.slice(Math.floor(freqs.length / 2))) : null
 
   const elapsedSec = (performance.now() - startedAt) / 1000
+  const perfTimeline = perf.timeline()
 
   return {
     durationSec: Math.round(elapsedSec),
@@ -147,6 +214,8 @@ export async function runCpuStress(
     minFreqGHz: minFreq,
     throttlePercent:
       startFreq && minFreq ? round(((startFreq - minFreq) / startFreq) * 100, 1) : null,
+    perfDropPercent: perfDrop(perfTimeline),
+    perfTimeline,
     errors,
     timeline
   }

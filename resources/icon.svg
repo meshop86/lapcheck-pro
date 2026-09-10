@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#152238"/>
+      <stop offset="1" stop-color="#070C16"/>
+    </linearGradient>
+    <linearGradient id="chip" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#0369a1"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
+
+  <!-- Chan chip: 4 chan moi canh, doc trung tam nhu IC that -->
+  <g fill="url(#chip)">
+    <rect x="330" y="184" width="34" height="70" rx="16"/>
+    <rect x="440" y="184" width="34" height="70" rx="16"/>
+    <rect x="550" y="184" width="34" height="70" rx="16"/>
+    <rect x="660" y="184" width="34" height="70" rx="16"/>
+    <rect x="330" y="588" width="34" height="70" rx="16"/>
+    <rect x="440" y="588" width="34" height="70" rx="16"/>
+    <rect x="550" y="588" width="34" height="70" rx="16"/>
+    <rect x="660" y="588" width="34" height="70" rx="16"/>
+    <rect x="228" y="286" width="70" height="34" rx="16"/>
+    <rect x="228" y="396" width="70" height="34" rx="16"/>
+    <rect x="228" y="506" width="70" height="34" rx="16"/>
+    <rect x="726" y="286" width="70" height="34" rx="16"/>
+    <rect x="726" y="396" width="70" height="34" rx="16"/>
+    <rect x="726" y="506" width="70" height="34" rx="16"/>
+  </g>
+
+  <!-- Than chip: cung la man hinh laptop -->
+  <rect x="272" y="228" width="480" height="386" rx="64" fill="#0B1424" stroke="url(#chip)" stroke-width="26"/>
+
+  <!-- Dau tick kiem dinh dat nam trong chip -->
+  <path d="M382 424 L470 512 L644 338" fill="none" stroke="#22d3ee" stroke-width="62"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Than may: de laptop mo rong hai ben -->
+  <path d="M232 700 H792 L864 806 A28 28 0 0 1 840 848 H184 A28 28 0 0 1 160 806 Z"
+        fill="#1E3350"/>
+  <rect x="430" y="762" width="164" height="26" rx="13" fill="#0B1424"/>
+</svg>

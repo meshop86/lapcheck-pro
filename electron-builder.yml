@@ -1,6 +1,9 @@
-appId: com.lapcheck.pro
-productName: LapCheck Pro
+appId: com.chiplaptest.app
+productName: chipLapTest
 copyright: Copyright (c) 2026 Luong Xuan Hoa
+
+# Ky ad-hoc ban macOS de may khong bao "app bi hong"
+afterPack: ./afterPack.cjs
 
 directories:
   output: release/${version}
@@ -17,6 +20,7 @@ npmRebuild: false
 
 mac:
   category: public.app-category.utilities
+  icon: resources/icon.png
   # Cong cu ngoai (smartctl...) di kem, app doc o Resources/bin/mac
   extraResources:
     - from: resources/bin/mac
@@ -26,9 +30,12 @@ mac:
       arch:
         - arm64
         - x64
-  # App can doc SMART va powermetrics nen khong chay trong sandbox
-  hardenedRuntime: true
+  # Chu ky ad-hoc khong di kem entitlement nen phai tat hardened runtime,
+  # neu bat thi macOS chan chinh cac tien trinh con cua app
+  hardenedRuntime: false
   gatekeeperAssess: false
+  # Khong co chung chi Developer ID: de electron-builder bo qua, afterPack tu ky
+  identity: null
   extendInfo:
     NSCameraUsageDescription: Dùng webcam để kiểm tra camera của máy.
     NSMicrophoneUsageDescription: Dùng micro để kiểm tra micro của máy.
@@ -37,6 +44,7 @@ dmg:
   artifactName: ${productName}-${version}-${arch}.${ext}
 
 win:
+  icon: resources/icon.png
   extraResources:
     - from: resources/bin/win
       to: bin/win
