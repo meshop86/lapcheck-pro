@@ -164,6 +164,68 @@ function BrandMark() {
   )
 }
 
+/**
+ * Trang thai quyen o cuoi sidebar. Tren macOS co nut xin quyen doc cam bien
+ * bang hop thoai mat khau cua he thong, khong phai mo app bang sudo trong Terminal.
+ */
+function PrivilegeBadge() {
+  const appInfo = useAppStore((s) => s.appInfo)
+  const [requesting, setRequesting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  if (!appInfo) return null
+
+  const granted = appInfo.privileged || appInfo.sensorAccess
+  const canRequest = appInfo.platform === 'darwin' && !granted
+
+  async function requestAccess(): Promise<void> {
+    setRequesting(true)
+    setError(null)
+    try {
+      const status = await window.chipLapTest.requestSensorAccess()
+      if (status === 'granted') {
+        useAppStore.setState({ appInfo: await window.chipLapTest.getAppInfo() })
+      } else if (status === 'failed') {
+        setError('Không bật được cảm biến. Thử lại hoặc khởi động lại app.')
+      }
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setRequesting(false)
+    }
+  }
+
+  const label = appInfo.privileged
+    ? 'Đang chạy quyền quản trị'
+    : appInfo.sensorAccess
+      ? 'Đã cấp quyền đọc cảm biến'
+      : 'Quyền thường — thiếu SMART & cảm biến'
+
+  return (
+    <div className="space-y-1.5">
+      <div
+        className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-[11px] ${
+          granted ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300'
+        }`}
+      >
+        {granted ? <ShieldCheck size={14} /> : <ShieldAlert size={14} />}
+        <span className="leading-tight">{label}</span>
+      </div>
+      {canRequest && (
+        <button
+          onClick={() => void requestAccess()}
+          disabled={requesting}
+          title="macOS sẽ hỏi mật khẩu máy để cho phép đọc nhiệt độ và điện năng"
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent-600 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent-500 disabled:opacity-50"
+        >
+          {requesting ? <Loader2 size={13} className="animate-spin" /> : <ShieldCheck size={13} />}
+          {requesting ? 'Đang chờ nhập mật khẩu…' : 'Cấp quyền đọc cảm biến'}
+        </button>
+      )}
+      {error && <p className="px-1 text-[10px] leading-snug text-rose-300">{error}</p>}
+    </div>
+  )
+}
+
 export default function App() {
   const [page, setPage] = useState<PageId>('dashboard')
   const { init, profile, profileLoading, profileError, appInfo, refreshProfile, results } =
@@ -220,22 +282,7 @@ export default function App() {
         <div className="flex-1" />
 
         <div className="space-y-2 border-t border-ink-800 p-3">
-          {appInfo && (
-            <div
-              className={`flex items-center gap-2 rounded-lg px-2.5 py-2 text-[11px] ${
-                appInfo.privileged
-                  ? 'bg-emerald-500/10 text-emerald-300'
-                  : 'bg-amber-500/10 text-amber-300'
-              }`}
-            >
-              {appInfo.privileged ? <ShieldCheck size={14} /> : <ShieldAlert size={14} />}
-              <span className="leading-tight">
-                {appInfo.privileged
-                  ? 'Đang chạy quyền quản trị'
-                  : 'Quyền thường — thiếu SMART & cảm biến'}
-              </span>
-            </div>
-          )}
+          {appInfo && <PrivilegeBadge />}
           <button
             onClick={() => void refreshProfile()}
             disabled={profileLoading}
