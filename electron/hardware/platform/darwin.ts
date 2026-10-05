@@ -1,3 +1,7 @@
+import { spawn } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
+import { readFile, stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { BatteryInfo, DisplayInfo, OwnershipInfo } from '@shared/types'
 import { parseJson, round, run, toNum, toSerial, toStr } from '../util'
 
@@ -253,40 +257,136 @@ export interface MacThermal {
   thermalPressure: string | null
 }
 
+const EMPTY_THERMAL: MacThermal = { cpuTempC: null, gpuTempC: null, powerW: null, thermalPressure: null }
 let powermetricsUnavailable = false
 let thermalCache: { value: MacThermal; at: number } | null = null
 const THERMAL_TTL_MS = 3000
+
+/** Thu muc do tien trinh root ghi mau powermetrics vao, sau khi nguoi dung cap quyen. */
+let helperDir: string | null = null
+const HELPER_SAMPLE = 'sample.txt'
+const HELPER_STALE_MS = 10_000
+
+function powermetricsArgs(intervalMs: number): string[] {
+  // Mac Intel doc nhiet do die qua sampler smc; Apple Silicon khong co sampler nay
+  const samplers = process.arch === 'x64' ? 'smc,cpu_power,thermal' : 'cpu_power,thermal'
+  return ['--samplers', samplers, '-i', String(intervalMs), '-n', '1']
+}
+
+function parsePowermetrics(text: string): MacThermal {
+  const numberAfter = (pattern: RegExp): number | null => toNum(pattern.exec(text)?.[1])
+  const combinedMW = numberAfter(/Combined Power \(CPU \+ GPU[^)]*\):\s*([\d.]+)\s*mW/i)
+  const cpuMW = numberAfter(/CPU Power:\s*([\d.]+)\s*mW/i)
+  return {
+    cpuTempC: numberAfter(/CPU die temperature:\s*([\d.]+)/i),
+    gpuTempC: numberAfter(/GPU die temperature:\s*([\d.]+)/i),
+    powerW: round((combinedMW ?? cpuMW ?? 0) / 1000, 2) || null,
+    thermalPressure: toStr(/pressure level:\s*(\w+)/i.exec(text)?.[1]) || null
+  }
+}
+
+/** Doc mau moi nhat do tien trinh root ghi ra. Mau cu qua nghia la tien trinh da dung. */
+async function readHelperSample(dir: string): Promise<string | null> {
+  try {
+    const file = join(dir, HELPER_SAMPLE)
+    const info = await stat(file)
+    if (Date.now() - info.mtimeMs > HELPER_STALE_MS) return null
+    return await readFile(file, 'utf8')
+  } catch {
+    return null
+  }
+}
+
+export function hasSensorHelper(): boolean {
+  return helperDir !== null
+}
+
+export type SensorAccessStatus = 'granted' | 'cancelled' | 'failed'
+
+/**
+ * Xin quyen quan tri bang hop thoai mat khau cua macOS (khong can mo Terminal).
+ * Chi tien trinh powermetrics chay bang root, giao dien van chay quyen thuong.
+ * Tien trinh root ghi mau vao thu muc root so huu (tranh bi thay bang symlink)
+ * va tu thoat khi app dong.
+ */
+let pendingRequest: Promise<SensorAccessStatus> | null = null
+
+export function requestSensorAccess(): Promise<SensorAccessStatus> {
+  if (helperDir) return Promise.resolve('granted')
+  pendingRequest ??= startSensorHelper().finally(() => {
+    pendingRequest = null
+  })
+  return pendingRequest
+}
+
+async function startSensorHelper(): Promise<SensorAccessStatus> {
+  // mkdir (khong -p) se loi neu thu muc da ton tai -> khong bi ghi de qua symlink dat san
+  const dir = `/tmp/chiplaptest.${randomBytes(8).toString('hex')}`
+  const args = powermetricsArgs(1000).join(' ')
+  // Vong lap chay ngay trong do shell script (khong chay nen): macOS dung tien trinh nen
+  // khi do shell script ket thuc, nen osascript phai song cung app.
+  const shell =
+    `/bin/mkdir -m 755 ${dir} || exit 1; ` +
+    `while kill -0 ${process.pid} 2>/dev/null; do ` +
+    `/usr/bin/powermetrics ${args} > ${dir}/s.tmp 2>&1 || break; ` +
+    `/bin/mv -f ${dir}/s.tmp ${dir}/${HELPER_SAMPLE}; done; /bin/rm -rf ${dir}`
+  const appleString = (s: string): string => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+  const script =
+    `do shell script ${appleString(shell)} with prompt ` +
+    `${appleString('chipLapTest cần quyền quản trị để đọc nhiệt độ, điện năng và mức nhiệt của máy.')} ` +
+    `with administrator privileges`
+
+  const child = spawn('osascript', ['-e', script], { stdio: ['ignore', 'ignore', 'pipe'] })
+  let stderr = ''
+  let exited = false
+  child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
+  child.on('exit', () => (exited = true))
+  child.on('error', (err) => {
+    stderr += err.message
+    exited = true
+  })
+
+  // Doi den khi co mau dau tien, hoac osascript thoat (huy / loi). Toi da 5 phut go mat khau.
+  const deadline = Date.now() + 5 * 60_000
+  while (Date.now() < deadline) {
+    if (await readHelperSample(dir)) {
+      helperDir = dir
+      powermetricsUnavailable = false
+      thermalCache = null
+      return 'granted'
+    }
+    if (exited) return /-128|cancel/i.test(stderr) ? 'cancelled' : 'failed'
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  child.kill()
+  return 'failed'
+}
 
 /**
  * powermetrics can quyen root. Tra ve dien nang va muc ap luc nhiet;
  * chi may Intel moi in duoc nhiet do die nen cac truong nhiet co the null.
  */
 export async function readThermal(): Promise<MacThermal> {
-  const empty: MacThermal = { cpuTempC: null, gpuTempC: null, powerW: null, thermalPressure: null }
-  if (powermetricsUnavailable) return empty
+  if (helperDir) {
+    const sample = await readHelperSample(helperDir)
+    if (sample) return parsePowermetrics(sample)
+    // Tien trinh root da dung (vd. may ngu lau) -> can xin quyen lai
+    helperDir = null
+    return EMPTY_THERMAL
+  }
+
+  if (powermetricsUnavailable) return EMPTY_THERMAL
   if (thermalCache && Date.now() - thermalCache.at < THERMAL_TTL_MS) return thermalCache.value
 
-  const res = await run(
-    'powermetrics',
-    ['--samplers', 'cpu_power,thermal', '-i', '200', '-n', '1'],
-    12_000
-  )
+  const res = await run('powermetrics', powermetricsArgs(200), 12_000)
   const text = `${res.stdout}\n${res.stderr}`
   if (/must be invoked as the superuser|unrecognized sampler/i.test(text)) {
     // Khong co quyen (hoac ban macOS khong ho tro) -> khong goi lai nua
     powermetricsUnavailable = true
-    return empty
+    return EMPTY_THERMAL
   }
 
-  const numberAfter = (pattern: RegExp): number | null => toNum(pattern.exec(text)?.[1])
-  const combinedMW = numberAfter(/Combined Power \(CPU \+ GPU[^)]*\):\s*([\d.]+)\s*mW/i)
-  const cpuMW = numberAfter(/CPU Power:\s*([\d.]+)\s*mW/i)
-  const value: MacThermal = {
-    cpuTempC: numberAfter(/CPU die temperature:\s*([\d.]+)/i),
-    gpuTempC: numberAfter(/GPU die temperature:\s*([\d.]+)/i),
-    powerW: round((combinedMW ?? cpuMW ?? 0) / 1000, 2) || null,
-    thermalPressure: toStr(/pressure level:\s*(\w+)/i.exec(text)?.[1]) || null
-  }
+  const value = parsePowermetrics(text)
   thermalCache = { value, at: Date.now() }
   return value
 }

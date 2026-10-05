@@ -12,6 +12,7 @@ import type {
 } from '@shared/types'
 import { collectSystemProfile, isPrivileged } from '../hardware'
 import { readSensors, sensorMonitor } from '../hardware/sensors'
+import * as mac from '../hardware/platform/darwin'
 import { runDiskBenchmark } from '../diagnostics/diskBench'
 import { runCpuStress } from '../diagnostics/cpuStress'
 import { runMemoryTest } from '../diagnostics/memoryTest'
@@ -70,6 +71,7 @@ export function registerIpcHandlers(): void {
     arch: process.arch,
     electron: process.versions.electron,
     privileged: await isPrivileged(),
+    sensorAccess: process.platform === 'darwin' && mac.hasSensorHelper(),
     reportsDir: reportsDir()
   }))
 
@@ -82,6 +84,10 @@ export function registerIpcHandlers(): void {
   )
 
   handle(IPC.sensorSnapshot, () => readSensors())
+
+  handle(IPC.sensorRequestAccess, () =>
+    process.platform === 'darwin' ? mac.requestSensorAccess() : ('failed' as const)
+  )
 
   /* --- Luồng cảm biến theo thời gian thực --- */
 

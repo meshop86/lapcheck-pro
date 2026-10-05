@@ -6,6 +6,7 @@ export const IPC = {
   sensorStart: 'sensor:start',
   sensorStop: 'sensor:stop',
   sensorData: 'sensor:data',
+  sensorRequestAccess: 'sensor:request-access',
 
   diagDiskBench: 'diag:disk-bench',
   diagCpuStress: 'diag:cpu-stress',
@@ -29,6 +30,8 @@ export interface AppInfo {
   arch: string
   electron: string
   privileged: boolean
+  /** macOS: da cap quyen doc cam bien qua hop thoai mat khau (app van chay quyen thuong) */
+  sensorAccess: boolean
   /** Duong dan thu muc mac dinh de luu bao cao */
   reportsDir: string
 }

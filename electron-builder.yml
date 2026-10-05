@@ -25,8 +25,14 @@ mac:
   extraResources:
     - from: resources/bin/mac
       to: bin/mac
+  # zip = ban chay ngay, giai nen xong mo app luon, khong can cai dat
+  artifactName: ${productName}-${version}-macos-${arch}-portable.${ext}
   target:
     - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip
       arch:
         - arm64
         - x64
@@ -48,8 +54,12 @@ win:
   extraResources:
     - from: resources/bin/win
       to: bin/win
+  artifactName: ${productName}-${version}-windows-portable.${ext}
   target:
     - target: nsis
+      arch:
+        - x64
+    - target: zip
       arch:
         - x64
   # Doc SMART, WMI va cam bien nhiet do doi hoi quyen quan tri

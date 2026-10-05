@@ -26,6 +26,8 @@ const api = {
   getAppInfo: () => invoke<AppInfo>(IPC.appInfo),
   getSystemProfile: (force = false) => invoke<SystemProfile>(IPC.systemProfile, force),
   getSensorSnapshot: () => invoke<SensorSnapshot>(IPC.sensorSnapshot),
+  requestSensorAccess: () =>
+    invoke<'granted' | 'cancelled' | 'failed'>(IPC.sensorRequestAccess),
 
   startSensorStream: (onData: (snapshot: SensorSnapshot) => void): (() => void) => {
     const listener = (_e: Electron.IpcRendererEvent, snapshot: SensorSnapshot): void => onData(snapshot)
